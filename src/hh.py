@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import requests
-
+from src.Vacancy import Vacancy  # Исправленный импорт
 
 class JobApi(ABC):
     url: str
@@ -12,73 +12,39 @@ class JobApi(ABC):
     def get_vacancies(self):
         pass
 
-
 class HeadHunterApi(JobApi):
-    url: str
-
     def __init__(self):
         super().__init__("https://api.hh.ru/vacancies")
 
     def get_vacancies(self, params=None):
         try:
             response = requests.get(self.url, params=params)
-            return response.json().get("items")
-        except Exception as e:
-            raise e
-
-
-class Vacancy:
-    name: str
-    vacancy_url: str
-    salary: int
-    description: str
-
-    def __init__(self, name, vacancy_url, salary, description):
-        self.name = name
-        self.vacancy_url = vacancy_url
-        self.salary = salary
-        self.description = description
-
-    @classmethod
-    def __verify_data(cls, other):
-        if not isinstance(other, (int, Vacancy)):
-            raise TypeError("Данные не относятся к единому классу или типу")
-
-        return other if isinstance(other, int) else other.salary
-
-    def __eq__(self, other):
-        obj = self.__verify_data(other)
-        return self.salary == obj
-
-    def __lt__(self, other):
-        obj = self.__verify_data(other)
-        return self.salary < obj
-
-    def __le__(self, other):
-        obj = self.__verify_data(other)
-        return self.salary <= obj
-
-    def __gt__(self, other):
-        obj = self.__verify_data(other)
-        return self.salary > obj
-
-    def __ge__(self, other):
-        obj = self.__verify_data(other)
-        return self.salary >= obj
-
-
-# alternate_url - ссылка на вакансию
-# name - имя вакансии
-# salary (from to) - зарплата
-# snipper (responsobility, requarement) - описание
-
+            response.raise_for_status()
+            data = response.json()
+            if "items" not in data:
+                raise ValueError("Ответ API не содержит вакансий")
+            data = data["items"]
+            vacancies = []
+            for item in data:
+                salary = item.get("salary")
+                salary_value = (
+                    salary["from"] if salary and salary.get("from") else 0
+                )
+                vacancy = Vacancy(
+                    name=item.get("name", "Название не указано"),
+                    vacancy_url=item.get("alternate_url", ""),
+                    salary=salary_value,
+                    description=item.get("snippet", {}).get("responsibility", "")
+                                or item.get("snippet", {}).get("requirement", ""),
+                )
+                vacancies.append(vacancy)
+            return vacancies
+        except requests.RequestException as e:
+            raise Exception(f"Ошибка при запросе к API: {e}")
 
 if __name__ == "__main__":
     hh = HeadHunterApi()
-    vacanci = hh.get_vacancies()
-    for i in vacanci:
-        print(i)
+    vacancies = hh.get_vacancies({"text": "Python", "per_page": 5})
+    for vacancy in vacancies:
+        print(vacancy)
         print()
-    # obj1 = Vacancy("лорсит", "https:hiuy", 500, "9")
-    # obj2 = Vacancy("лорсит", "https:hiuy", 500, "9")
-    # print(obj1 <= obj2)
